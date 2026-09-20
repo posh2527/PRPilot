@@ -42,6 +42,29 @@
     </div>
   </header>
 
+  <button class="install-panel-toggle" id="install-panel-toggle" type="button" aria-controls="account-selection-view" hidden>
+    <svg class="install-panel-toggle-icon" viewBox="0 0 16 16" width="13" height="13" focusable="false" aria-hidden="true" fill="currentColor"><path d="M8 1.5a.75.75 0 0 1 .75.75v4.25h4.25a.75.75 0 0 1 0 1.5H8.75v4.25a.75.75 0 0 1-1.5 0V8H3a.75.75 0 0 1 0-1.5h4.25V2.25A.75.75 0 0 1 8 1.5Z"/></svg>
+    Install GitHub App
+  </button>
+
+  <aside class="github-install-panel" id="account-selection-view" aria-label="GitHub installation" hidden>
+    <div class="install-panel-topbar">
+      <div>
+        <p class="card-kicker">GITHUB ACCESS</p>
+        <h2 class="install-panel-title">Choose GitHub account or organization</h2>
+      </div>
+      <button class="install-panel-close" id="close-install-panel" type="button" aria-label="Close GitHub installation panel">&times;</button>
+    </div>
+    <div class="install-panel-body">
+      <div class="account-toolbar"><div class="signed-in-user" id="signed-in-user"></div><button class="header-link-button" id="sign-out-account" type="button">Sign out</button></div>
+      <p class="install-panel-intro">Select where PRPilot should manage pull request review analysis.</p>
+      <div class="account-list" id="account-list"></div>
+      <div class="selection-actions"><button class="primary-button" id="install-account" type="button">Install PRPilot on another account</button></div>
+      <div class="empty-installation" id="empty-installation" hidden><h2>Install PRPilot on GitHub</h2><p>PRPilot is connected to your GitHub identity, but it is not installed on any repositories yet.</p><button class="primary-button" id="install-empty" type="button">Install PRPilot GitHub App</button><small>GitHub will let you choose a personal account or organization, then select all repositories or only selected repositories.</small></div>
+      <div class="onboarding-error" id="panel-error" role="alert" hidden></div>
+    </div>
+  </aside>
+
   <main class="main-content">
     <div class="content-shell">
       <section class="onboarding-view" id="onboarding-view" aria-label="GitHub connection onboarding" hidden>
@@ -68,14 +91,6 @@
               <button class="text-button" id="continue-demo" type="button">Continue in demo mode</button>
               <p class="safe-note">PRPilot never asks for your GitHub password or a personal access token.</p>
             </div>
-          </section>
-
-          <section class="onboarding-state account-state" id="account-selection-view" hidden>
-            <div class="account-toolbar"><div class="signed-in-user" id="signed-in-user"></div><button class="header-link-button" id="sign-out-account" type="button">Sign out</button></div>
-            <div class="selection-heading"><p class="card-kicker">GITHUB ACCESS</p><h1>Choose GitHub account or organization</h1><p>Select where PRPilot should manage pull request review analysis.</p></div>
-            <div class="account-list" id="account-list"></div>
-            <div class="selection-actions"><button class="primary-button" id="install-account" type="button">Install PRPilot on another account</button></div>
-            <div class="empty-installation" id="empty-installation" hidden><h2>Install PRPilot on GitHub</h2><p>PRPilot is connected to your GitHub identity, but it is not installed on any repositories yet.</p><button class="primary-button" id="install-empty" type="button">Install PRPilot GitHub App</button><small>GitHub will let you choose a personal account or organization, then select all repositories or only selected repositories.</small></div>
           </section>
 
           <section class="onboarding-state repository-state" id="repository-selector" hidden>

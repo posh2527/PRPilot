@@ -25,8 +25,8 @@ let demoMode = false;
 const elements = {};
 
 document.addEventListener("DOMContentLoaded", () => {
-  const ids = ["demoNotice", "loading", "empty", "error", "prContainer", "refreshButton", "retryButton", "lastUpdated", "dashboard", "analysis", "onboarding", "login", "accounts", "repositorySelector", "success", "onboardingError", "connectedRepository", "connectedRepositoryName"];
-  const domIds = ["demo-notice", "loading-state", "empty-state", "error-state", "pr-container", "refresh-button", "retry-button", "last-updated", "dashboard-view", "analysis-view", "onboarding-view", "onboarding-login", "account-selection-view", "repository-selector", "connection-success", "onboarding-error", "connected-repository", "connected-repository-name"];
+  const ids = ["demoNotice", "loading", "empty", "error", "prContainer", "refreshButton", "retryButton", "lastUpdated", "dashboard", "analysis", "onboarding", "login", "accounts", "repositorySelector", "success", "onboardingError", "connectedRepository", "connectedRepositoryName", "installPanelToggle", "closeInstallPanel", "panelError"];
+  const domIds = ["demo-notice", "loading-state", "empty-state", "error-state", "pr-container", "refresh-button", "retry-button", "last-updated", "dashboard-view", "analysis-view", "onboarding-view", "onboarding-login", "account-selection-view", "repository-selector", "connection-success", "onboarding-error", "connected-repository", "connected-repository-name", "install-panel-toggle", "close-install-panel", "panel-error"];
   ids.forEach((key, index) => { elements[key] = document.getElementById(domIds[index]); });
   resetDashboardStates();
   elements.refreshButton.addEventListener("click", fetchPRs);
@@ -39,6 +39,8 @@ document.addEventListener("DOMContentLoaded", () => {
   document.getElementById("change-repository").addEventListener("click", switchRepository);
   document.getElementById("back-to-accounts").addEventListener("click", showAccountSelectionView);
   document.getElementById("open-dashboard").addEventListener("click", showDashboard);
+  elements.closeInstallPanel.addEventListener("click", closeInstallPanel);
+  elements.installPanelToggle.addEventListener("click", () => { renderAccountSelection(); openInstallPanel(); });
   document.getElementById("repository-form").addEventListener("submit", (event) => { event.preventDefault(); const input = document.querySelector("input[name='repository']:checked"); if (input) selectRepository(input.value); });
   document.getElementById("filter-container").addEventListener("click", (event) => { const button = event.target.closest("button[data-filter]"); if (!button) return; activeFilter = button.dataset.filter || "all"; renderFilters(); renderPRCards(); });
   initializeApp();
@@ -72,9 +74,12 @@ async function checkAuthentication() {
 function hideAllOnboardingStates() { [elements.login, elements.accounts, elements.repositorySelector, elements.success].forEach((view) => { view.hidden = true; }); }
 function resetDashboardStates() { elements.loading.hidden = true; elements.error.hidden = true; elements.empty.hidden = true; elements.prContainer.hidden = true; }
 function hideDashboardViews() { elements.dashboard.hidden = true; elements.analysis.hidden = true; elements.connectedRepository.hidden = true; resetDashboardStates(); }
-function showConnectGitHubView() { demoMode = false; document.body.classList.add("onboarding-mode"); elements.onboarding.hidden = false; hideDashboardViews(); hideAllOnboardingStates(); elements.login.hidden = false; }
-function showAccountSelectionView() { document.body.classList.add("onboarding-mode"); elements.onboarding.hidden = false; hideDashboardViews(); hideAllOnboardingStates(); elements.accounts.hidden = false; renderAccountSelection(); }
-function showRepositorySelectionView() { if (!selectedInstallation) return showAccountSelectionView(); document.body.classList.add("onboarding-mode"); elements.onboarding.hidden = false; hideDashboardViews(); hideAllOnboardingStates(); elements.repositorySelector.hidden = false; renderRepositorySelection(); }
+function showConnectGitHubView() { demoMode = false; document.body.classList.add("onboarding-mode"); elements.onboarding.hidden = false; hideDashboardViews(); hideAllOnboardingStates(); elements.login.hidden = false; setInstallToggleVisible(false); }
+function showAccountSelectionView() { if (!currentUser) return showConnectGitHubView(); document.body.classList.remove("onboarding-mode"); elements.onboarding.hidden = true; elements.connectedRepository.hidden = false; elements.connectedRepositoryName.textContent = `Connected repository: ${selectedRepository || "None selected yet"}`; document.getElementById("connected-account-name").textContent = `Connected account: ${selectedInstallation?.account_login || currentUser.login || "GitHub"}`; document.getElementById("dashboard-user").innerHTML = avatarMarkup(currentUser.avatar_url, currentUser.login); renderDashboard(); hideAllOnboardingStates(); renderAccountSelection(); openInstallPanel(); }
+function openInstallPanel() { elements.accounts.hidden = false; setInstallToggleVisible(false); }
+function closeInstallPanel() { elements.accounts.hidden = true; setInstallToggleVisible(Boolean(currentUser) && !demoMode && !document.body.classList.contains("onboarding-mode")); }
+function setInstallToggleVisible(visible) { elements.installPanelToggle.hidden = !visible; document.body.classList.toggle("install-toggle-visible", Boolean(visible)); }
+function showRepositorySelectionView() { if (!selectedInstallation) return showAccountSelectionView(); setInstallToggleVisible(false); document.body.classList.add("onboarding-mode"); elements.onboarding.hidden = false; hideDashboardViews(); hideAllOnboardingStates(); elements.repositorySelector.hidden = false; renderRepositorySelection(); }
 
 async function fetchInstallations() {
   try {
@@ -101,6 +106,8 @@ async function fetchInstallations() {
 
 function renderAccountSelection() {
   const list = document.getElementById("account-list");
+  elements.onboardingError.hidden = true;
+  elements.panelError.hidden = true;
   document.getElementById("signed-in-user").innerHTML = currentUser ? `${avatarMarkup(currentUser.avatar_url, currentUser.name || currentUser.login)}<span>${escapeHTML(currentUser.name || currentUser.login)}<small>@${escapeHTML(currentUser.login || "")}</small></span>` : "";
   document.getElementById("empty-installation").hidden = installations.length > 0;
   list.hidden = installations.length === 0;
@@ -118,13 +125,13 @@ function renderRepositorySelection() {
   options.querySelectorAll("input[name='repository']").forEach((input) => input.addEventListener("change", () => options.querySelectorAll(".repository-option").forEach((option) => option.classList.toggle("selected", option.contains(input) && input.checked))));
 }
 function selectRepository(repositoryName) { selectedRepository = repositoryName; storageSet(SELECTED_INSTALLATION_KEY, String(selectedInstallation.id)); storageSet(SELECTED_REPOSITORY_KEY, repositoryName); showDashboard(); }
-function switchRepository() { clearSelectedRepository(); fetchInstallations(); }
+function switchRepository() { clearSelectedRepository(); prs = []; fetchInstallations(); }
 function installOnAnotherAccount() { window.location.href = `${BACKEND_URL}/api/github/install`; }
 async function logout() { try { await fetch(`${BACKEND_URL}/api/auth/logout`, { method: "POST", credentials: "include" }); } catch (error) { /* Signed-out UI remains available if the backend is unavailable. */ } clearSelectedRepository(); currentUser = null; demoMode = false; prs = []; showConnectGitHubView(); }
-function showDashboard() { if (!selectedRepository && !demoMode) selectedRepository = getStoredSelectedRepository(); if (!selectedRepository && !demoMode) return showAccountSelectionView(); document.body.classList.remove("onboarding-mode"); elements.onboarding.hidden = true; elements.dashboard.hidden = false; elements.analysis.hidden = true; elements.connectedRepository.hidden = false; elements.connectedRepositoryName.textContent = `Connected repository: ${selectedRepository || "PRPilot demo repository"}`; document.getElementById("connected-account-name").textContent = demoMode ? "Local development mode" : `Connected account: ${selectedInstallation?.account_login || currentUser?.login || "GitHub"}`; document.getElementById("dashboard-user").innerHTML = currentUser ? `${avatarMarkup(currentUser.avatar_url, currentUser.login)} @${escapeHTML(currentUser.login || "")}` : "Demo workspace"; if (!prs.length) fetchPRs(); window.scrollTo({ top: 0, behavior: "smooth" }); }
+function showDashboard() { if (!selectedRepository && !demoMode) selectedRepository = getStoredSelectedRepository(); if (!selectedRepository && !demoMode) return showAccountSelectionView(); document.body.classList.remove("onboarding-mode"); elements.onboarding.hidden = true; elements.dashboard.hidden = false; elements.analysis.hidden = true; elements.connectedRepository.hidden = false; elements.connectedRepositoryName.textContent = `Connected repository: ${selectedRepository || "PRPilot demo repository"}`; document.getElementById("connected-account-name").textContent = demoMode ? "Local development mode" : `Connected account: ${selectedInstallation?.account_login || currentUser?.login || "GitHub"}`; document.getElementById("dashboard-user").innerHTML = currentUser ? `${avatarMarkup(currentUser.avatar_url, currentUser.login)} @${escapeHTML(currentUser.login || "")}` : "Demo workspace"; if (!prs.length) fetchPRs(); closeInstallPanel(); window.scrollTo({ top: 0, behavior: "smooth" }); }
 function enterDemoMode() { demoMode = true; selectedRepository = "PRPilot demo repository"; currentUser = { login: "demo-maintainer", name: "Demo maintainer" }; elements.onboarding.hidden = false; hideAllOnboardingStates(); elements.success.hidden = false; }
 function showLocalDevelopmentPrompt() { showOnboardingError("Local development mode: authentication APIs are unavailable. Continue in demo mode to preview the dashboard."); }
-function showOnboardingError(message) { elements.onboardingError.textContent = message; elements.onboardingError.hidden = false; }
+function showOnboardingError(message) { elements.onboardingError.textContent = message; elements.onboardingError.hidden = false; elements.panelError.textContent = message; elements.panelError.hidden = false; }
 function avatarMarkup(url, name) { const initials = String(name || "GH").split(/\s+/).map((part) => part[0]).join("").slice(0, 2).toUpperCase(); return url ? `<img class="avatar" src="${escapeHTML(url)}" alt="">` : `<span class="avatar avatar-fallback" aria-hidden="true">${escapeHTML(initials)}</span>`; }
 
 async function fetchPRs() {
