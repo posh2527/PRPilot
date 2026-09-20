@@ -1,4 +1,4 @@
-﻿"""
+"""
 app/routers/dev.py – Development & demo mode endpoints.
 
 Only enabled when APP_ENV=development and LOCAL_DEVELOPMENT_MODE=true.
@@ -14,7 +14,7 @@ from sqlalchemy.orm import Session
 from app import analyzer
 from app.database import get_db
 from app.dependencies import dev_only_guard
-from app.models import PullRequestAnalysis, Repository
+from app.models import GitHubInstallation, PullRequestAnalysis, Repository
 from app.schemas import (
     AnalyzeSampleResponse,
     SamplePRPayload,
@@ -37,6 +37,18 @@ def seed_sample_pull_requests(db: Session = Depends(get_db)):
     2. Needs fixes
     3. Needs attention
     """
+    inst = db.query(GitHubInstallation).filter_by(github_installation_id=1001).first()
+    if not inst:
+        inst = GitHubInstallation(
+            github_installation_id=1001,
+            account_login="prpilot-demo",
+            account_type="Organization",
+            account_avatar_url="https://avatars.githubusercontent.com/u/9919?s=200&v=4",
+            active=True,
+        )
+        db.add(inst)
+        db.flush()
+
     # Create or get demo repository
     repo = find_or_create_repository(
         db=db,
@@ -46,7 +58,7 @@ def seed_sample_pull_requests(db: Session = Depends(get_db)):
         full_name="prpilot-demo/sample-service",
         private=False,
         description="Demo repository for PRPilot hackathon presentation",
-        installation_id=None,
+        installation_id=inst.id,
     )
 
     now = datetime.now(timezone.utc)

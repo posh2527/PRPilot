@@ -1,4 +1,4 @@
-﻿"""
+"""
 app/config.py – Pydantic Settings for PRPilot.
 
 All values are read from environment variables (or .env file via python-dotenv).
@@ -28,7 +28,7 @@ class Settings(BaseSettings):
 
     # ── Application ─────────────────────────────────────────────────────────
     app_env: str = "development"
-    app_base_url: str = "http://127.0.0.1:8000"
+    app_base_url: str = "http://127.0.0.1:8010"
     frontend_origin: str = "http://127.0.0.1:8080"
 
     # ── Database ─────────────────────────────────────────────────────────────
@@ -45,7 +45,7 @@ class Settings(BaseSettings):
     github_app_client_secret: Optional[str] = None
     github_app_private_key_path: str = "./secrets/github-app-private-key.pem"
     github_webhook_secret: Optional[str] = None
-    github_oauth_callback_url: str = "http://127.0.0.1:8000/api/auth/github/callback"
+    github_oauth_callback_url: str = "http://127.0.0.1:8010/api/auth/github/callback"
     github_installation_id: Optional[int] = None
     github_owner: Optional[str] = None
     github_repo: Optional[str] = None

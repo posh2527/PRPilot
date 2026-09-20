@@ -1,4 +1,4 @@
-﻿"""
+"""
 app/routers/auth.py – Optional GitHub OAuth authentication.
 
 Follows security standards:
@@ -29,12 +29,27 @@ router = APIRouter(prefix="/api/auth", tags=["Authentication"])
 
 
 @router.get("/github/login")
-def github_login(request: Request):
+def github_login(request: Request, db: Session = Depends(get_db)):
     """
     Redirect the user to GitHub to initiate the OAuth flow.
     A cryptographically secure state token is stored in the session.
     """
     if not settings.github_app_client_id:
+        if settings.local_development_mode:
+            demo_user = db.query(User).filter_by(github_user_id=9999).first()
+            if not demo_user:
+                demo_user = User(
+                    github_user_id=9999,
+                    github_login="demo-maintainer",
+                    display_name="Demo Maintainer",
+                    avatar_url="https://avatars.githubusercontent.com/u/9919?s=200&v=4",
+                )
+                db.add(demo_user)
+                db.commit()
+                db.refresh(demo_user)
+            request.session["user_id"] = demo_user.id
+            return RedirectResponse(url=f"{settings.frontend_origin}/?login=success")
+
         raise HTTPException(
             status_code=status.HTTP_503_SERVICE_UNAVAILABLE,
             detail="GitHub OAuth is not configured (missing GITHUB_APP_CLIENT_ID)",
@@ -149,7 +164,9 @@ def get_current_user(request: Request, db: Session = Depends(get_db)):
         user=UserOut(
             id=user.id,
             github_login=user.github_login,
+            login=user.github_login,
             display_name=user.display_name,
+            name=user.display_name,
             avatar_url=user.avatar_url,
         ),
         authenticated=True,

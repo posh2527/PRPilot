@@ -1,4 +1,4 @@
-﻿"""
+"""
 app/routers/pull_requests.py – Pull Request analysis query endpoints.
 """
 from __future__ import annotations
@@ -36,6 +36,26 @@ async def list_pull_requests(db: Session = Depends(get_db)):
         ) if not value
     ]
     if missing or not settings.github_private_key:
+        analyses = (
+            db.query(PullRequestAnalysis)
+            .options(joinedload(PullRequestAnalysis.repository))
+            .order_by(PullRequestAnalysis.updated_at.desc())
+            .all()
+        )
+        if analyses:
+            return PRListResponse(prs=[PRAnalysisOut.from_orm_model(a) for a in analyses if a.repository])
+
+        if settings.local_development_mode:
+            from app.routers.dev import seed_sample_pull_requests
+            seed_sample_pull_requests(db=db)
+            analyses = (
+                db.query(PullRequestAnalysis)
+                .options(joinedload(PullRequestAnalysis.repository))
+                .order_by(PullRequestAnalysis.updated_at.desc())
+                .all()
+            )
+            return PRListResponse(prs=[PRAnalysisOut.from_orm_model(a) for a in analyses if a.repository])
+
         if not settings.github_private_key:
             missing.append("GITHUB_PRIVATE_KEY or GITHUB_APP_PRIVATE_KEY_PATH")
         raise HTTPException(

@@ -1,4 +1,4 @@
-﻿"""
+"""
 app/schemas.py – Pydantic response/request schemas for the PRPilot API.
 """
 from __future__ import annotations
@@ -123,7 +123,9 @@ class UserOut(BaseModel):
 
     id: int
     github_login: str
+    login: Optional[str] = None
     display_name: Optional[str] = None
+    name: Optional[str] = None
     avatar_url: Optional[str] = None
 
 

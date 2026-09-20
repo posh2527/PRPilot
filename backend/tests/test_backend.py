@@ -5,11 +5,24 @@ import sys
 import unittest
 
 ROOT = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
-sys.path.insert(0, os.path.join(ROOT, "src"))
+SRC_DIR = os.path.join(ROOT, "src")
+if SRC_DIR not in sys.path:
+    sys.path.insert(0, SRC_DIR)
 
 import analyzer  # noqa: E402
-import app  # noqa: E402
 import store  # noqa: E402
+
+import importlib.util
+spec = importlib.util.spec_from_file_location("src_app", os.path.join(SRC_DIR, "app.py"))
+src_app = importlib.util.module_from_spec(spec)
+sys.modules["src_app"] = src_app
+spec.loader.exec_module(src_app)
+
+# Prevent src from polluting sys.modules['app'] or sys.path
+if "app" in sys.modules and getattr(sys.modules["app"], "__file__", "").endswith("src" + os.sep + "app.py"):
+    del sys.modules["app"]
+if SRC_DIR in sys.path:
+    sys.path.remove(SRC_DIR)
 
 DB = {}
 store.save_analysis = lambda a: DB.__setitem__(a["repoPrKey"], a)
@@ -21,10 +34,18 @@ def load(name):
         return json.load(f)
 
 
+import hashlib
+import hmac
+
 def post(payload, gh_event="pull_request"):
-    return app.lambda_handler({
+    body = json.dumps(payload)
+    headers = {"X-GitHub-Event": gh_event}
+    secret = os.environ.get("GITHUB_WEBHOOK_SECRET", "")
+    if secret:
+        headers["x-hub-signature-256"] = "sha256=" + hmac.new(secret.encode("utf-8"), body.encode("utf-8"), hashlib.sha256).hexdigest()
+    return src_app.lambda_handler({
         "httpMethod": "POST", "path": "/github-webhook",
-        "headers": {"X-GitHub-Event": gh_event}, "body": json.dumps(payload),
+        "headers": headers, "body": body,
     }, None)
 
 
@@ -84,7 +105,7 @@ class HandlerTests(unittest.TestCase):
         p = load("ready.json"); p["action"] = "synchronize"
         post(p)
         post(load("low_value.json"))
-        r = app.lambda_handler({"httpMethod": "GET", "path": "/prs"}, None)
+        r = src_app.lambda_handler({"httpMethod": "GET", "path": "/prs"}, None)
         items = json.loads(r["body"])["prs"]
         self.assertEqual(r["statusCode"], 200)
         self.assertEqual(len(items), 2)
@@ -94,10 +115,13 @@ class HandlerTests(unittest.TestCase):
         p = load("ready.json"); p["action"] = "closed"
         self.assertIn("Ignored", json.loads(post(p)["body"])["message"])
         self.assertEqual(json.loads(post({"zen": "Keep it logically awesome."}, "ping")["body"])["message"], "pong")
-        bad = app.lambda_handler({"httpMethod": "POST", "path": "/github-webhook", "headers": {}, "body": "{nope"}, None)
+        secret = os.environ.get("GITHUB_WEBHOOK_SECRET", "")
+        bad_headers = {"x-hub-signature-256": "sha256=" + hmac.new(secret.encode("utf-8"), b"{nope", hashlib.sha256).hexdigest()} if secret else {}
+        bad = src_app.lambda_handler({"httpMethod": "POST", "path": "/github-webhook", "headers": bad_headers, "body": "{nope"}, None)
         self.assertEqual(bad["statusCode"], 400)
         self.assertEqual(post({"action": "opened", "pull_request": {}})["statusCode"], 400)
-        empty = app.lambda_handler({"httpMethod": "POST", "path": "/github-webhook", "headers": {}, "body": None}, None)
+        empty_headers = {"x-hub-signature-256": "sha256=" + hmac.new(secret.encode("utf-8"), b"", hashlib.sha256).hexdigest()} if secret else {}
+        empty = src_app.lambda_handler({"httpMethod": "POST", "path": "/github-webhook", "headers": empty_headers, "body": None}, None)
         self.assertEqual(empty["statusCode"], 400)
         for r in (bad, empty):
             self.assertIn("error", json.loads(r["body"]))
@@ -144,13 +168,13 @@ class HandlerTests(unittest.TestCase):
         self.assertEqual(json.loads(r["body"])["recommendation"], "Low-value or unclear")
 
     def test_options_and_404(self):
-        r = app.lambda_handler({"httpMethod": "OPTIONS", "path": "/prs"}, None)
+        r = src_app.lambda_handler({"httpMethod": "OPTIONS", "path": "/prs"}, None)
         self.assertEqual(r["statusCode"], 204)
         self.assertEqual(r["headers"]["Access-Control-Allow-Methods"], "GET, POST, OPTIONS")
         self.assertEqual(r["headers"]["Access-Control-Allow-Origin"], "*")
-        r = app.lambda_handler({"httpMethod": "OPTIONS", "path": "/github-webhook"}, None)
+        r = src_app.lambda_handler({"httpMethod": "OPTIONS", "path": "/github-webhook"}, None)
         self.assertEqual(r["statusCode"], 204)
-        self.assertEqual(app.lambda_handler({"httpMethod": "GET", "path": "/x"}, None)["statusCode"], 404)
+        self.assertEqual(src_app.lambda_handler({"httpMethod": "GET", "path": "/x"}, None)["statusCode"], 404)
 
     def test_comment_format(self):
         import github_client
