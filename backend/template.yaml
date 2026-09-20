@@ -1,0 +1,47 @@
+AWSTemplateFormatVersion: '2010-09-09'
+Transform: AWS::Serverless-2016-10-31
+Description: PRPilot backend - GitHub PR webhook analyzer (local demo)
+
+Globals:
+  Function:
+    Runtime: python3.12
+    Timeout: 30
+    MemorySize: 256
+
+Resources:
+  PRPilotFunction:
+    Type: AWS::Serverless::Function
+    Properties:
+      CodeUri: src/
+      Handler: app.lambda_handler
+      # DynamoDB read/write. Ignored by `sam local` (LocalStack has no IAM enforcement),
+      # but correct if this template is ever deployed to real AWS.
+      Policies:
+        - DynamoDBCrudPolicy:
+            TableName: PRAnalysis
+      Environment:
+        Variables:
+          TABLE_NAME: PRAnalysis
+          # Reachable from inside the SAM Docker container (Mac/Windows).
+          # On Linux override in env.json (see README).
+          DYNAMODB_ENDPOINT: http://host.docker.internal:4566
+          GITHUB_TOKEN: ""            # set in env.json, never here
+          GITHUB_API_URL: https://api.github.com
+          POST_COMMENTS: "false"
+          GITHUB_WEBHOOK_SECRET: ""
+      Events:
+        ListPRs:
+          Type: Api
+          Properties: { Path: /prs, Method: get }
+        Webhook:
+          Type: Api
+          Properties: { Path: /github-webhook, Method: post }
+        # CORS: preflight routes below are answered by the Lambda, which also adds the
+        # CORS headers to every response (see app.py). Kept out of the template's Cors
+        # setting on purpose so the headers are never duplicated.
+        PreflightPRs:
+          Type: Api
+          Properties: { Path: /prs, Method: options }
+        PreflightWebhook:
+          Type: Api
+          Properties: { Path: /github-webhook, Method: options }

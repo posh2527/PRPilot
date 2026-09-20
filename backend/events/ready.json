@@ -1,0 +1,26 @@
+{
+  "action": "opened",
+  "number": 12,
+  "pull_request": {
+    "number": 12,
+    "title": "Fix login validation",
+    "body": "Fixes #45. Adds stricter email and password validation to the login form and adds unit tests for the login validation rules.",
+    "html_url": "https://github.com/acme/shop/pull/12",
+    "user": {
+      "login": "dev-alice"
+    },
+    "state": "open"
+  },
+  "repository": {
+    "name": "shop",
+    "full_name": "acme/shop",
+    "owner": {
+      "login": "acme"
+    }
+  },
+  "changed_files": [
+    "src/auth/login.py",
+    "src/auth/validators.py",
+    "tests/test_login.py"
+  ]
+}

@@ -1,0 +1,25 @@
+{
+  "action": "opened",
+  "number": 13,
+  "pull_request": {
+    "number": 13,
+    "title": "Add discount code support to checkout",
+    "body": "Adds discount code support to the checkout page so customers can apply promo codes at payment time.",
+    "html_url": "https://github.com/acme/shop/pull/13",
+    "user": {
+      "login": "dev-bob"
+    },
+    "state": "open"
+  },
+  "repository": {
+    "name": "shop",
+    "full_name": "acme/shop",
+    "owner": {
+      "login": "acme"
+    }
+  },
+  "changed_files": [
+    "src/checkout/discount.py",
+    "src/checkout/cart.py"
+  ]
+}

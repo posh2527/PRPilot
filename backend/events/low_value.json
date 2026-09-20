@@ -1,0 +1,24 @@
+{
+  "action": "opened",
+  "number": 14,
+  "pull_request": {
+    "number": 14,
+    "title": "Update docs",
+    "body": "misc cleanup",
+    "html_url": "https://github.com/acme/shop/pull/14",
+    "user": {
+      "login": "dev-carol"
+    },
+    "state": "open"
+  },
+  "repository": {
+    "name": "shop",
+    "full_name": "acme/shop",
+    "owner": {
+      "login": "acme"
+    }
+  },
+  "changed_files": [
+    "docs/CONTRIBUTING.md"
+  ]
+}
