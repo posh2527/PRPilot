@@ -1,6 +1,10 @@
-﻿const API_URL = "http://127.0.0.1:3000/prs";
-const AUTH_ME_URL = "/api/auth/me";
-const INSTALLATIONS_URL = "/api/installations";
+﻿
+const BACKEND_URL = "http://127.0.0.1:8010";
+const API_URL = `${BACKEND_URL}/prs`;
+const PRS_API_URL = `${BACKEND_URL}/api/prs`;
+const AUTH_ME_URL = `${BACKEND_URL}/api/auth/me`;
+const INSTALLATIONS_URL = `${BACKEND_URL}/api/installations`;
+const REPOSITORIES_URL = `${BACKEND_URL}/api/repositories`;
 const REFRESH_INTERVAL = 30000;
 const SELECTED_INSTALLATION_KEY = "prpilot_selected_installation_id";
 const SELECTED_REPOSITORY_KEY = "prpilot_selected_repository";
@@ -27,7 +31,7 @@ document.addEventListener("DOMContentLoaded", () => {
   ids.forEach((key, index) => { elements[key] = document.getElementById(domIds[index]); });
   elements.refreshButton.addEventListener("click", fetchPRs);
   elements.retryButton.addEventListener("click", fetchPRs);
-  document.getElementById("continue-github").addEventListener("click", () => { window.location.href = "/api/auth/github/login"; });
+  document.getElementById("continue-github").addEventListener("click", () => { window.location.href = `${BACKEND_URL}/api/auth/github/login`; });
   document.getElementById("continue-demo").addEventListener("click", enterDemoMode);
   ["install-account", "install-empty", "install-more-repositories", "manage-connection"].forEach((id) => document.getElementById(id).addEventListener("click", installOnAnotherAccount));
   document.getElementById("sign-out-account").addEventListener("click", logout);
@@ -76,7 +80,14 @@ async function fetchInstallations() {
     if (response.status === 401) { clearSelectedRepository(); showConnectGitHubView(); return; }
     if (!response.ok) throw new Error("Installations request failed");
     const payload = await response.json();
-    installations = Array.isArray(payload.installations) ? payload.installations : [];
+    installations = Array.isArray(payload) ? payload : (Array.isArray(payload.installations) ? payload.installations : []);
+    if (installations.some((installation) => !Array.isArray(installation.repositories))) {
+      const repositoriesResponse = await fetch(REPOSITORIES_URL, { credentials: "include" });
+      if (repositoriesResponse.ok) {
+        const repositories = await repositoriesResponse.json();
+        installations = installations.map((installation) => ({ ...installation, repositories: Array.isArray(installation.repositories) ? installation.repositories : repositories.map((repository) => ({ full_name: repository.full_name, private: repository.private, description: repository.description })) }));
+      }
+    }
     const storedRepository = getStoredSelectedRepository();
     const storedInstallation = getStoredSelectedInstallation();
     const authorizedInstallation = installations.find((installation) => String(installation.id) === String(storedInstallation) && installation.repositories?.some((repository) => repository.full_name === storedRepository));
@@ -106,8 +117,8 @@ function renderRepositorySelection() {
 }
 function selectRepository(repositoryName) { selectedRepository = repositoryName; storageSet(SELECTED_INSTALLATION_KEY, String(selectedInstallation.id)); storageSet(SELECTED_REPOSITORY_KEY, repositoryName); showDashboard(); }
 function switchRepository() { clearSelectedRepository(); fetchInstallations(); }
-function installOnAnotherAccount() { window.location.href = "/api/github/install"; }
-async function logout() { try { await fetch("/api/auth/logout", { method: "POST", credentials: "include" }); } catch (error) { /* Signed-out UI remains available if the backend is unavailable. */ } clearSelectedRepository(); currentUser = null; demoMode = false; prs = []; showConnectGitHubView(); }
+function installOnAnotherAccount() { window.location.href = `${BACKEND_URL}/api/github/install`; }
+async function logout() { try { await fetch(`${BACKEND_URL}/api/auth/logout`, { method: "POST", credentials: "include" }); } catch (error) { /* Signed-out UI remains available if the backend is unavailable. */ } clearSelectedRepository(); currentUser = null; demoMode = false; prs = []; showConnectGitHubView(); }
 function showDashboard() { if (!selectedRepository && !demoMode) selectedRepository = getStoredSelectedRepository(); if (!selectedRepository && !demoMode) return showAccountSelectionView(); document.body.classList.remove("onboarding-mode"); elements.onboarding.hidden = true; elements.dashboard.hidden = false; elements.analysis.hidden = true; elements.connectedRepository.hidden = false; elements.connectedRepositoryName.textContent = `Connected repository: ${selectedRepository || "PRPilot demo repository"}`; document.getElementById("connected-account-name").textContent = demoMode ? "Local development mode" : `Connected account: ${selectedInstallation?.account_login || currentUser?.login || "GitHub"}`; document.getElementById("dashboard-user").innerHTML = currentUser ? `${avatarMarkup(currentUser.avatar_url, currentUser.login)} @${escapeHTML(currentUser.login || "")}` : "Demo workspace"; if (!prs.length) fetchPRs(); window.scrollTo({ top: 0, behavior: "smooth" }); }
 function enterDemoMode() { demoMode = true; selectedRepository = "PRPilot demo repository"; currentUser = { login: "demo-maintainer", name: "Demo maintainer" }; elements.onboarding.hidden = false; hideAllOnboardingStates(); elements.success.hidden = false; }
 function showLocalDevelopmentPrompt() { showOnboardingError("Local development mode: authentication APIs are unavailable. Continue in demo mode to preview the dashboard."); }
@@ -118,13 +129,13 @@ async function fetchPRs() {
   if (isLoading || (!selectedRepository && !demoMode)) return;
   isLoading = true; showLoading(); elements.refreshButton.disabled = true;
   try {
-    const url = demoMode ? API_URL : `/api/prs?repository=${encodeURIComponent(selectedRepository)}`;
+    const url = demoMode ? API_URL : `${PRS_API_URL}?repository=${encodeURIComponent(selectedRepository)}`;
     const response = await fetch(url, { credentials: "include", headers: { Accept: "application/json" } });
     if (response.status === 401) { clearSelectedRepository(); showConnectGitHubView(); return; }
     if (response.status === 403) { showError("You do not have access to this repository."); return; }
     if (!response.ok) throw new Error("PR request failed");
     const payload = await response.json(); if (!Array.isArray(payload.prs)) throw new Error("Unexpected PR response");
-    prs = normalizePRs(payload.prs); elements.demoNotice.hidden = !demoMode; renderDashboard();
+    prs = normalizePRs(payload.prs); elements.demoNotice.hidden = true; renderDashboard();
   } catch (error) {
     if (demoMode) { prs = normalizePRs(fallbackPRs); elements.demoNotice.hidden = false; renderDashboard(); }
     else showError("We could not load pull requests. Check the backend connection and try again.");

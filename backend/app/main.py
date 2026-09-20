@@ -37,6 +37,7 @@ async def lifespan(app: FastAPI):
         settings.github_app_configured,
         settings.local_development_mode,
     )
+    logger.info("GitHub OAuth configured: %s", settings.github_oauth_configured)
     yield
     logger.info("PRPilot backend shutting down.")
 
@@ -98,12 +99,13 @@ app.include_router(pull_requests.router)
 app.include_router(dev.router)
 app.include_router(auth.router)
 app.include_router(installations.router)
+app.include_router(installations.github_router)
 app.include_router(repositories.router)
 
 # Compatibility route: /prs -> alias to /api/prs
 @app.get("/prs", response_model=PRListResponse, tags=["Pull Requests"], include_in_schema=False)
-def legacy_list_pull_requests(resp: PRListResponse = None):
+async def legacy_list_pull_requests(resp: PRListResponse = None):
     from fastapi import Depends
     from app.database import get_db
     from app.routers.pull_requests import list_pull_requests
-    return list_pull_requests(next(get_db()))
+    return await list_pull_requests(next(get_db()))

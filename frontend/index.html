@@ -157,13 +157,13 @@
         </div>
         <div class="state-message" id="empty-state" hidden>
           <span class="state-icon" aria-hidden="true">&#10003;</span>
-          <strong>No PRs analyzed yet</strong>
+          <strong>No PR analyses found yet</strong>
           <p>Open a pull request in the test repository to see it here.</p>
         </div>
         <div class="state-message error-state" id="error-state" role="alert" hidden>
           <span class="state-icon" aria-hidden="true">&#9888;</span>
-          <strong>Unable to load pull requests</strong>
-          <p>Check that the backend is running, then try again.</p>
+          <strong>Backend is not running</strong>
+          <p>Backend returned an unexpected response or is unavailable. Check the backend connection and try again.</p>
           <button class="retry-button" id="retry-button" type="button">Retry</button>
         </div>
         <div class="pr-list" id="pr-container" aria-live="polite"></div>

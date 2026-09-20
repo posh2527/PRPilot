@@ -7,6 +7,7 @@ import os
 from pathlib import Path
 import sys
 import unittest
+from unittest.mock import patch
 
 ROOT_DIR = Path(__file__).resolve().parent.parent
 if str(ROOT_DIR) not in sys.path:
@@ -25,6 +26,7 @@ from app import analyzer
 from app.config import settings
 from app.database import Base, get_db
 from app.main import app
+from app.routers import pull_requests
 
 test_engine = create_engine("sqlite:///./test_prpilot.db", connect_args={"check_same_thread": False})
 TestingSessionLocal = sessionmaker(autocommit=False, autoflush=False, bind=test_engine)
@@ -198,12 +200,20 @@ class TestPRPilotFastAPI(unittest.TestCase):
         self.assertEqual(r3["recommendation"], "Needs attention")
 
     def test_10_seed_and_get_prs(self):
-        """POST /api/dev/seed-samples seeds 3 PRs; GET /api/prs returns expected schema."""
+        """GET /api/prs maps live GitHub PRs into the frontend schema."""
         seed_resp = client.post("/api/dev/seed-samples")
         self.assertEqual(seed_resp.status_code, 200)
         self.assertEqual(seed_resp.json()["seeded"], 3)
 
-        list_resp = client.get("/api/prs")
+        async def fake_open_prs(owner, repo, installation_id):
+            return [
+                {"number": 101, "title": "Ready PR", "body": "Fixes #1 and adds tests for login flow.", "user": {"login": "alice"}, "changed_files": ["app/login.py", "tests/test_login.py"], "updated_at": "2026-09-20T12:00:00Z"},
+                {"number": 102, "title": "Needs fixes PR", "body": "Updates billing code for invoice calculation before release.", "user": {"login": "bob"}, "changed_files": ["app/billing.py"], "updated_at": "2026-09-20T11:00:00Z"},
+                {"number": 103, "title": "Docs mismatch PR", "body": "Fixes a database crash in production.", "user": {"login": "charlie"}, "changed_files": ["README.md"], "updated_at": "2026-09-20T10:00:00Z"},
+            ]
+
+        with patch.object(settings, "github_app_id", "test-app-id"), patch.object(settings, "github_installation_id", 123), patch.object(settings, "github_owner", "acme"), patch.object(settings, "github_repo", "demo"), patch.object(type(settings), "github_private_key", new=property(lambda self: "test-private-key")), patch.object(pull_requests.github_client, "get_open_pull_requests", fake_open_prs):
+            list_resp = client.get("/api/prs")
         self.assertEqual(list_resp.status_code, 200)
         data = list_resp.json()
         self.assertIn("prs", data)

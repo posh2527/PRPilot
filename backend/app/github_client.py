@@ -76,6 +76,13 @@ async def get_pull_request_files(
     Raises httpx.HTTPError or GitHubAppError on failure.
     """
     token = await get_installation_access_token(installation_id)
+    return await get_pull_request_files_with_token(owner, repo, number, token)
+
+
+async def get_pull_request_files_with_token(
+    owner: str, repo: str, number: int, token: str
+) -> list[str]:
+    """Return changed file paths using an already-issued installation token."""
     file_paths: list[str] = []
 
     async with httpx.AsyncClient(timeout=15.0) as client:
@@ -92,6 +99,41 @@ async def get_pull_request_files(
                 break  # last page
 
     return file_paths
+
+
+async def get_open_pull_requests(
+    owner: str, repo: str, installation_id: int
+) -> list[dict[str, Any]]:
+    """Fetch all open pull requests and their changed files from GitHub."""
+    token = await get_installation_access_token(installation_id)
+    headers = _auth_headers(token)
+    pull_requests: list[dict[str, Any]] = []
+
+    async with httpx.AsyncClient(timeout=15.0) as client:
+        for page in range(1, 6):
+            response = await client.get(
+                f"{GITHUB_API_BASE}/repos/{owner}/{repo}/pulls",
+                headers=headers,
+                params={"state": "open", "per_page": 100, "page": page},
+            )
+            response.raise_for_status()
+            batch = response.json()
+            if not isinstance(batch, list):
+                raise GitHubAppError("GitHub returned an unexpected pull request response.")
+
+            for pull_request in batch:
+                number = pull_request.get("number")
+                if not number:
+                    continue
+                pull_request["changed_files"] = await get_pull_request_files_with_token(
+                    owner, repo, int(number), token
+                )
+                pull_requests.append(pull_request)
+
+            if len(batch) < 100:
+                break
+
+    return pull_requests
 
 
 async def create_or_update_review_comment(

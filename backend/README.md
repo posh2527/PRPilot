@@ -129,16 +129,20 @@ cp .env.example .env
 | Variable | Default Value | Description |
 |---|---|---|
 | `APP_ENV` | `development` | Environment mode (`development` or `production`). |
-| `APP_BASE_URL` | `http://127.0.0.1:8000` | Public / local base URL for the backend. |
+| `APP_BASE_URL` | `http://127.0.0.1:8010` | Public / local base URL for the backend. |
 | `FRONTEND_ORIGIN` | `http://127.0.0.1:8080` | Allowed CORS origin (strict origin matching). |
 | `DATABASE_URL` | `sqlite:///./prpilot.db` | SQLAlchemy connection string (swap to `postgresql://...` when scaling). |
 | `SESSION_SECRET` | *(Random secret)* | Secret used to sign session cookies. |
 | `GITHUB_APP_ID` | `""` | GitHub App ID from your App settings page. |
+| `GITHUB_PRIVATE_KEY` | `"-----BEGIN RSA PRIVATE KEY-----\\n...\\n-----END RSA PRIVATE KEY-----"` | Optional inline PEM. Use `\\n` for line breaks in `.env`, or use the path setting below. |
+| `GITHUB_INSTALLATION_ID` | `""` | GitHub App installation ID for the target repository. |
+| `GITHUB_OWNER` | `""` | GitHub repository owner or organization login. |
+| `GITHUB_REPO` | `""` | GitHub repository name. |
 | `GITHUB_APP_CLIENT_ID` | `""` | GitHub App Client ID (for OAuth / Identification). |
 | `GITHUB_APP_CLIENT_SECRET`| `""` | GitHub App Client Secret. |
 | `GITHUB_APP_PRIVATE_KEY_PATH`| `./secrets/github-app-private-key.pem` | Path to the downloaded RSA private key (.pem). |
 | `GITHUB_WEBHOOK_SECRET` | `""` | Secret configured in GitHub App webhook settings. |
-| `GITHUB_OAUTH_CALLBACK_URL` | `http://127.0.0.1:8000/api/auth/github/callback` | OAuth redirect URI. |
+| `GITHUB_OAUTH_CALLBACK_URL` | `http://127.0.0.1:8010/api/auth/github/callback` | OAuth redirect URI. |
 | `LOCAL_DEVELOPMENT_MODE` | `true` | Enables dev endpoints (`/api/dev/*`) and unauthenticated local mode. |
 
 ---
@@ -148,7 +152,7 @@ cp .env.example .env
 ### Start the FastAPI Server
 
 ```bash
-uvicorn app.main:app --reload --port 8000
+uvicorn app.main:app --reload --port 8010
 ```
 
 The database tables in SQLite (`prpilot.db`) are created automatically on startup via FastAPI lifespan events.
@@ -160,7 +164,7 @@ The database tables in SQLite (`prpilot.db`) are created automatically on startu
 ### Check Health
 
 ```bash
-curl http://127.0.0.1:8000/health
+curl http://127.0.0.1:8010/health
 ```
 
 Expected response:
@@ -177,7 +181,7 @@ Expected response:
 PRPilot comes with a built-in seed endpoint that instantly loads 3 sample PRs covering all recommendation outcomes:
 
 ```bash
-curl -X POST http://127.0.0.1:8000/api/dev/seed-samples
+curl -X POST http://127.0.0.1:8010/api/dev/seed-samples
 ```
 
 Expected response:
@@ -188,10 +192,24 @@ Expected response:
 }
 ```
 
-### Query Pull Requests
+### Query Live Pull Requests
+
+`GET /api/prs` now fetches open pull requests from the configured GitHub App installation. It requires `GITHUB_APP_ID`, a private key via `GITHUB_PRIVATE_KEY` or `GITHUB_APP_PRIVATE_KEY_PATH`, `GITHUB_INSTALLATION_ID`, `GITHUB_OWNER`, and `GITHUB_REPO`.
 
 ```bash
-curl http://127.0.0.1:8000/api/prs
+curl http://127.0.0.1:8010/api/prs
+```
+
+For an inline private key in `.env`, preserve the PEM line breaks as escaped newlines:
+
+```text
+GITHUB_PRIVATE_KEY="-----BEGIN RSA PRIVATE KEY-----\\n...\\n-----END RSA PRIVATE KEY-----"
+```
+
+Run the mocked live-integration tests without GitHub credentials:
+
+```bash
+python -m pytest tests/test_live_prs.py -q
 ```
 
 Expected response:
