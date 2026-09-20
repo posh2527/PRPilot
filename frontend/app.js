@@ -1,6 +1,5 @@
 ﻿
 const BACKEND_URL = "http://127.0.0.1:8010";
-const API_URL = `${BACKEND_URL}/prs`;
 const PRS_API_URL = `${BACKEND_URL}/api/prs`;
 const AUTH_ME_URL = `${BACKEND_URL}/api/auth/me`;
 const INSTALLATIONS_URL = `${BACKEND_URL}/api/installations`;
@@ -29,6 +28,7 @@ document.addEventListener("DOMContentLoaded", () => {
   const ids = ["demoNotice", "loading", "empty", "error", "prContainer", "refreshButton", "retryButton", "lastUpdated", "dashboard", "analysis", "onboarding", "login", "accounts", "repositorySelector", "success", "onboardingError", "connectedRepository", "connectedRepositoryName"];
   const domIds = ["demo-notice", "loading-state", "empty-state", "error-state", "pr-container", "refresh-button", "retry-button", "last-updated", "dashboard-view", "analysis-view", "onboarding-view", "onboarding-login", "account-selection-view", "repository-selector", "connection-success", "onboarding-error", "connected-repository", "connected-repository-name"];
   ids.forEach((key, index) => { elements[key] = document.getElementById(domIds[index]); });
+  resetDashboardStates();
   elements.refreshButton.addEventListener("click", fetchPRs);
   elements.retryButton.addEventListener("click", fetchPRs);
   document.getElementById("continue-github").addEventListener("click", () => { window.location.href = `${BACKEND_URL}/api/auth/github/login`; });
@@ -70,9 +70,11 @@ async function checkAuthentication() {
 }
 
 function hideAllOnboardingStates() { [elements.login, elements.accounts, elements.repositorySelector, elements.success].forEach((view) => { view.hidden = true; }); }
-function showConnectGitHubView() { demoMode = false; document.body.classList.add("onboarding-mode"); elements.onboarding.hidden = false; elements.dashboard.hidden = true; elements.analysis.hidden = true; elements.connectedRepository.hidden = true; hideAllOnboardingStates(); elements.login.hidden = false; }
-function showAccountSelectionView() { document.body.classList.add("onboarding-mode"); elements.onboarding.hidden = false; hideAllOnboardingStates(); elements.accounts.hidden = false; renderAccountSelection(); }
-function showRepositorySelectionView() { if (!selectedInstallation) return showAccountSelectionView(); document.body.classList.add("onboarding-mode"); elements.onboarding.hidden = false; hideAllOnboardingStates(); elements.repositorySelector.hidden = false; renderRepositorySelection(); }
+function resetDashboardStates() { elements.loading.hidden = true; elements.error.hidden = true; elements.empty.hidden = true; elements.prContainer.hidden = true; }
+function hideDashboardViews() { elements.dashboard.hidden = true; elements.analysis.hidden = true; elements.connectedRepository.hidden = true; resetDashboardStates(); }
+function showConnectGitHubView() { demoMode = false; document.body.classList.add("onboarding-mode"); elements.onboarding.hidden = false; hideDashboardViews(); hideAllOnboardingStates(); elements.login.hidden = false; }
+function showAccountSelectionView() { document.body.classList.add("onboarding-mode"); elements.onboarding.hidden = false; hideDashboardViews(); hideAllOnboardingStates(); elements.accounts.hidden = false; renderAccountSelection(); }
+function showRepositorySelectionView() { if (!selectedInstallation) return showAccountSelectionView(); document.body.classList.add("onboarding-mode"); elements.onboarding.hidden = false; hideDashboardViews(); hideAllOnboardingStates(); elements.repositorySelector.hidden = false; renderRepositorySelection(); }
 
 async function fetchInstallations() {
   try {
@@ -126,19 +128,22 @@ function showOnboardingError(message) { elements.onboardingError.textContent = m
 function avatarMarkup(url, name) { const initials = String(name || "GH").split(/\s+/).map((part) => part[0]).join("").slice(0, 2).toUpperCase(); return url ? `<img class="avatar" src="${escapeHTML(url)}" alt="">` : `<span class="avatar avatar-fallback" aria-hidden="true">${escapeHTML(initials)}</span>`; }
 
 async function fetchPRs() {
-  if (isLoading || (!selectedRepository && !demoMode)) return;
+  if (isLoading) return;
   isLoading = true; showLoading(); elements.refreshButton.disabled = true;
   try {
-    const url = demoMode ? API_URL : `${PRS_API_URL}?repository=${encodeURIComponent(selectedRepository)}`;
-    const response = await fetch(url, { credentials: "include", headers: { Accept: "application/json" } });
-    if (response.status === 401) { clearSelectedRepository(); showConnectGitHubView(); return; }
-    if (response.status === 403) { showError("You do not have access to this repository."); return; }
-    if (!response.ok) throw new Error("PR request failed");
-    const payload = await response.json(); if (!Array.isArray(payload.prs)) throw new Error("Unexpected PR response");
-    prs = normalizePRs(payload.prs); elements.demoNotice.hidden = true; renderDashboard();
+    const response = await fetch(PRS_API_URL, { credentials: "include", headers: { Accept: "application/json" } });
+    if (response.status === 401) { clearSelectedRepository(); throw new Error("Your GitHub session has expired. Sign in again to load pull requests."); }
+    if (response.status === 403) throw new Error("You do not have access to this repository.");
+    if (!response.ok) throw new Error(`The backend returned an unexpected response (HTTP ${response.status}).`);
+    const data = await response.json();
+    if (!data || !Array.isArray(data.prs)) throw new Error("The backend response did not include a pull request list.");
+    prs = normalizePRs(data.prs);
+    elements.demoNotice.hidden = true;
+    renderDashboard();
   } catch (error) {
+    console.error("PRPilot could not load pull requests:", error);
     if (demoMode) { prs = normalizePRs(fallbackPRs); elements.demoNotice.hidden = false; renderDashboard(); }
-    else showError("We could not load pull requests. Check the backend connection and try again.");
+    else showError(errorMessage(error));
   } finally { isLoading = false; elements.refreshButton.disabled = false; }
 }
 
@@ -166,5 +171,6 @@ function formatMinutes(minutes) { return minutes >= 60 ? `${Math.floor(minutes /
 function toTimestamp(timestamp) { const value = Number(timestamp); return Number.isFinite(value) && value > 0 ? value : 0; }
 function showLoading() { elements.loading.hidden = false; elements.error.hidden = true; elements.empty.hidden = true; elements.prContainer.hidden = true; }
 function showError(message) { elements.loading.hidden = true; elements.empty.hidden = true; elements.error.hidden = false; elements.prContainer.hidden = true; const paragraph = elements.error.querySelector("p"); if (paragraph && message) paragraph.textContent = message; }
+function errorMessage(error) { const raw = error instanceof Error ? error.message : ""; if (!raw || raw === "Failed to fetch" || raw.includes("NetworkError") || raw.includes("Load failed")) return "We could not load pull requests. Check the backend connection and try again."; return raw; }
 
 document.addEventListener("click", (event) => { const button = event.target.closest("[data-pr-key]"); if (!button) return; const pr = prs.find((item) => getPRKey(item) === button.dataset.prKey); if (pr) showAnalysis(pr); });
